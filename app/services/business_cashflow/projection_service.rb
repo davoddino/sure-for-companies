@@ -114,14 +114,13 @@ module BusinessCashflow
       end
 
       def account_balance_as_of_cents(account)
-        balance = account.balances
-                         .where(currency: @settings.currency)
-                         .where("date <= ?", @as_of)
-                         .order(date: :desc)
-                         .first
+        latest_balance = account.balances
+                                .where(currency: @settings.currency)
+                                .order(date: :desc)
+                                .first
 
-        amount = balance&.end_balance || account.balance
-        money_to_cents(amount)
+        latest_balance_cents = money_to_cents(latest_balance&.end_balance || account.balance)
+        latest_balance_cents - future_account_entry_effect_cents(account, through: latest_balance&.date)
       end
 
       def actual_manual_event_effects_cents
@@ -283,6 +282,21 @@ module BusinessCashflow
                  .where.not(transactions: { kind: "funds_movement" })
                  .where.not(entryable_id: linked_business_cashflow_transaction_ids)
                  .to_a
+        end
+      end
+
+      def future_account_entry_effect_cents(account, through:)
+        return 0 if through.present? && through <= @as_of
+
+        @future_account_entry_effect_cents ||= {}
+        @future_account_entry_effect_cents[[ account.id, through ]] ||= begin
+          entries = account.entries
+                           .preload(:account)
+                           .joins("INNER JOIN transactions ON transactions.id = entries.entryable_id AND entries.entryable_type = 'Transaction'")
+                           .where(currency: @settings.currency)
+                           .where(date: (@as_of + 1.day)..(through || Date.new(9999, 12, 31)))
+
+          entries.sum { |entry| entry_bank_effect_cents(entry) }
         end
       end
 

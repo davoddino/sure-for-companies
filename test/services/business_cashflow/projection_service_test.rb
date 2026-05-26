@@ -129,6 +129,30 @@ module BusinessCashflow
       assert_equal "Future supplier payment", result.timeline.first.event.name
     end
 
+    test "bank balance backs future transactions out of cached account balance" do
+      account = @family.accounts.create!(
+        name: "EUR bank without balances",
+        balance: 900,
+        currency: "EUR",
+        classification: "asset",
+        accountable: Depository.new
+      )
+
+      account.entries.create!(
+        name: "Future supplier payment",
+        date: @as_of + 10.days,
+        amount: 100,
+        currency: "EUR",
+        entryable: Transaction.new
+      )
+
+      result = BusinessCashflow::ProjectionService.new(@family, as_of: @as_of).call
+
+      assert_equal 100_000, result.bank_balance_cents
+      assert_equal 10_000, result.committed_outflows_cents
+      assert_equal 90_000, result.free_cash_cents
+    end
+
     test "returns next open VAT deadline" do
       BusinessCashflow::TaxPeriod.generate_quarterly_defaults!(@family, years: [ 2026 ])
 
