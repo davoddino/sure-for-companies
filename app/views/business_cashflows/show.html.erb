@@ -1,13 +1,26 @@
 <% title t(".title", default: "Business Cashflow") %>
 
 <% content_for :page_header do %>
-  <div class="space-y-1 mb-6">
-    <h1 class="text-xl lg:text-3xl font-medium text-primary">
-      <%= t(".title", default: "Business Cashflow") %>
-    </h1>
-    <p class="text-sm lg:text-base text-secondary">
-      <%= t(".subtitle", default: "CavadaLabs cash planning: bank balance, reserved VAT/F24 money, and free cash.") %>
-    </p>
+  <div class="space-y-4 mb-6">
+    <div class="space-y-1">
+      <h1 class="text-xl lg:text-3xl font-medium text-primary">
+        <%= t(".title", default: "Business Cashflow") %>
+      </h1>
+      <p class="text-sm lg:text-base text-secondary">
+        <%= t(".subtitle", default: "CavadaLabs cash planning: bank balance, reserved VAT/F24 money, and free cash.") %>
+      </p>
+    </div>
+
+    <div class="flex flex-wrap items-center gap-2">
+      <% @horizon_options.each do |days| %>
+        <%= render DS::Link.new(
+          text: t(".horizon.days", default: "%{days} giorni", days: days),
+          variant: @horizon_days == days ? "secondary" : "ghost",
+          href: business_cashflow_path(horizon_days: days),
+          size: :sm
+        ) %>
+      <% end %>
+    </div>
   </div>
 <% end %>
 
@@ -15,14 +28,14 @@
   <section class="grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-3 gap-4">
     <% [
       [ t(".metrics.bank_balance", default: "Saldo bancario"), @projection.bank_balance_cents ],
-      [ t(".metrics.free_cash", default: "Disponibilita libera"), @projection.free_cash_cents ],
+      [ t(".metrics.projected_free", default: "Disponibilita libera"), @projection.projected_free_cash_cents ],
+      [ t(".metrics.free_cash_without_inflows", default: "Margine senza incassi"), @projection.free_cash_cents ],
+      [ t(".metrics.lowest_free", default: "Punto minimo disponibilita"), @projection.lowest_projected_free_cash_cents ],
+      [ t(".metrics.confirmed_inflows", default: "Incassi confermati"), @projection.confirmed_inflows_cents ],
+      [ t(".metrics.committed_outflows", default: "Uscite impegnate"), -@projection.committed_outflows_cents ],
       [ t(".metrics.vat_reserve", default: "IVA accantonata"), -@projection.vat_reserve_cents ],
       [ t(".metrics.vat_credit", default: "IVA a credito"), @projection.vat_credit_cents ],
-      [ t(".metrics.tax_reserve", default: "Bollo/F24 accantonati"), -@projection.tax_reserve_cents ],
-      [ t(".metrics.committed_outflows", default: "Uscite impegnate"), -@projection.committed_outflows_cents ],
-      [ t(".metrics.confirmed_inflows", default: "Incassi confermati"), @projection.confirmed_inflows_cents ],
-      [ t(".metrics.lowest_bank", default: "Punto minimo previsto"), @projection.lowest_projected_bank_balance_cents ],
-      [ t(".metrics.projected_free", default: "Disponibilita a 90 giorni"), @projection.projected_free_cash_cents ]
+      [ t(".metrics.tax_reserve", default: "Bollo/F24 accantonati"), -@projection.tax_reserve_cents ]
     ].each do |label, amount_cents| %>
       <article class="bg-container shadow-border-xs rounded-lg p-4 min-h-32 min-w-0 flex flex-col justify-between gap-3">
         <p class="text-sm text-secondary leading-snug"><%= label %></p>
@@ -45,11 +58,26 @@
     </article>
   </section>
 
+  <section class="bg-container shadow-border-xs rounded-lg p-4 space-y-4">
+    <div class="flex items-center justify-between gap-3">
+      <h2 class="text-lg font-medium text-primary"><%= t(".chart.title", default: "Andamento disponibilita") %></h2>
+      <p class="text-sm text-secondary">
+        <%= t(".timeline.horizon", default: "%{days} giorni", days: @horizon_days) %>
+      </p>
+    </div>
+
+    <div
+      id="businessCashflowFreeCashChart"
+      class="relative h-72 min-w-0"
+      data-controller="time-series-chart"
+      data-time-series-chart-data-value="<%= business_cashflow_free_cash_series(@projection).to_json %>"></div>
+  </section>
+
   <section class="space-y-3">
     <div class="flex items-center justify-between">
       <h2 class="text-lg font-medium text-primary"><%= t(".timeline.title", default: "Upcoming timeline") %></h2>
       <p class="text-sm text-secondary">
-        <%= t(".timeline.horizon", default: "%{days} day horizon", days: @settings.planning_horizon_days) %>
+        <%= t(".timeline.horizon", default: "%{days} giorni", days: @horizon_days) %>
       </p>
     </div>
 

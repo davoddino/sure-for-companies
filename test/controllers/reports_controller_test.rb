@@ -252,11 +252,13 @@ class ReportsControllerTest < ActionDispatch::IntegrationTest
     assert_select "a[href=?]", reports_path(period_type: :monthly, start_date: prev_start, end_date: prev_end)
   end
 
-  test "monthly period navigation disables next arrow on current month" do
+  test "monthly period navigation allows next month from current month" do
     get reports_path(period_type: :monthly)
     assert_response :ok
 
-    assert_select "button[disabled][aria-label=?]", I18n.t("reports.index.next_period")
+    next_start = Date.current.beginning_of_month + 1.month
+    next_end = next_start.end_of_month
+    assert_select "a[href=?]", reports_path(period_type: :monthly, start_date: next_start, end_date: next_end)
   end
 
   test "monthly period navigation shows next month link on past month" do
@@ -270,21 +272,15 @@ class ReportsControllerTest < ActionDispatch::IntegrationTest
     assert_select "a[href=?]", reports_path(period_type: :monthly, start_date: next_start, end_date: next_end)
   end
 
-  test "last 6 months next window extends to current month end when crossing boundary" do
+  test "last 6 months next window can move into the future" do
     start_date = Date.current.beginning_of_month - 12.months
     end_date = start_date + 6.months - 1.day
 
     get reports_path(period_type: :last_6_months, start_date: start_date, end_date: end_date)
     assert_response :ok
 
-    candidate_start = start_date.beginning_of_month + 6.months
-    if candidate_start + 6.months >= Date.current.beginning_of_month
-      expected_next_end   = Date.current.end_of_month
-      expected_next_start = (expected_next_end + 1.day - 6.months).beginning_of_month
-    else
-      expected_next_start = candidate_start
-      expected_next_end   = expected_next_start + 6.months - 1.day
-    end
+    expected_next_start = start_date.beginning_of_month + 6.months
+    expected_next_end   = expected_next_start + 6.months - 1.day
 
     assert_select "a[href=?]",
       reports_path(period_type: :last_6_months, start_date: expected_next_start, end_date: expected_next_end)
@@ -331,10 +327,28 @@ class ReportsControllerTest < ActionDispatch::IntegrationTest
     assert_select "a[href=?]", reports_path(period_type: :ytd, start_date: prev_start, end_date: prev_end)
   end
 
-  test "ytd period navigation disables next arrow on current year" do
+  test "ytd period navigation allows next year from current year" do
     get reports_path(period_type: :ytd)
     assert_response :ok
 
-    assert_select "button[disabled][aria-label=?]", I18n.t("reports.index.next_period")
+    next_year = Date.current.year + 1
+    assert_select "a[href=?]",
+      reports_path(period_type: :ytd, start_date: Date.new(next_year, 1, 1), end_date: Date.new(next_year, 12, 31))
+  end
+
+  test "monthly report includes future transactions in selected future month" do
+    future_month = Date.current.next_month.beginning_of_month
+    create_transaction(
+      account: @family.accounts.first,
+      name: "Future client payment",
+      date: future_month + 2.days,
+      amount: -2500
+    )
+
+    get reports_path(period_type: :monthly, start_date: future_month, end_date: future_month.end_of_month)
+
+    assert_response :ok
+    assert_select "h3", text: I18n.t("reports.summary.total_income")
+    assert_includes @response.body, Money.new(2500, @family.currency).format
   end
 end

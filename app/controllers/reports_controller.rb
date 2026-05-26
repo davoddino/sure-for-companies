@@ -1091,33 +1091,28 @@ class ReportsController < ApplicationController
         prev_end   = prev_start.end_of_month
         next_start = @start_date.beginning_of_month + 1.month
         next_end   = next_start.end_of_month
-        at_latest  = @start_date.beginning_of_month >= Date.current.beginning_of_month
+        at_latest  = false
       when :quarterly
         prev_start = (@start_date.beginning_of_quarter - 1.day).beginning_of_quarter
         prev_end   = prev_start.end_of_quarter
         next_start = @end_date.end_of_quarter + 1.day
         next_end   = next_start.end_of_quarter
-        at_latest  = @start_date.beginning_of_quarter >= Date.current.beginning_of_quarter
+        at_latest  = false
       when :ytd
         prev_year  = @start_date.year - 1
         prev_start = Date.new(prev_year, 1, 1)
         prev_end   = Date.new(prev_year, 12, 31)
         next_year  = @start_date.year + 1
         next_start = Date.new(next_year, 1, 1)
-        next_end   = next_year == Date.current.year ? Date.current : Date.new(next_year, 12, 31)
-        at_latest  = @start_date.year >= Date.current.year
+        next_end   = Date.new(next_year, 12, 31)
+        at_latest  = false
       when :last_6_months
         prev_start = @start_date.beginning_of_month - 6.months
         prev_end   = prev_start + 6.months - 1.day
         candidate_start = @start_date.beginning_of_month + 6.months
-        if candidate_start + 6.months >= Date.current.beginning_of_month
-          next_end   = Date.current.end_of_month
-          next_start = (next_end + 1.day - 6.months).beginning_of_month
-        else
-          next_start = candidate_start
-          next_end   = next_start + 6.months - 1.day
-        end
-        at_latest  = @end_date >= Date.current.end_of_month
+        next_start = candidate_start
+        next_end   = next_start + 6.months - 1.day
+        at_latest  = false
       else
         return nil
       end
