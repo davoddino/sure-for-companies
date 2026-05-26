@@ -19,6 +19,8 @@ class BalanceSheet::AccountTotals
     AccountRow = Data.define(:account, :converted_balance, :is_syncing, :included_in_finances) do
       def syncing? = is_syncing
       def included_in_finances? = included_in_finances
+      def balance = account.balance_as_of
+      def balance_money = account.balance_as_of_money
 
       # Allows Rails path helpers to generate URLs from the wrapper
       def to_param = account.to_param
@@ -97,9 +99,10 @@ class BalanceSheet::AccountTotals
     # Converts an account's balance to the family's currency using pre-fetched exchange rates.
     # @return [BigDecimal] balance in the family's currency
     def converted_balance_for(account)
-      return account.balance if account.currency == family.currency
+      balance = account.balance_as_of
+      return balance if account.currency == family.currency
 
       rate = exchange_rates[account.currency]
-      account.balance * rate
+      balance * rate
     end
 end

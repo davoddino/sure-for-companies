@@ -6,6 +6,8 @@ module BusinessCashflow
       :horizon_date,
       :bank_balance_cents,
       :vat_reserve_cents,
+      :vat_debit_cents,
+      :vat_credit_cents,
       :tax_reserve_cents,
       :committed_outflows_cents,
       :confirmed_inflows_cents,
@@ -54,7 +56,9 @@ module BusinessCashflow
 
     def call
       current_bank_balance = bank_balance_cents
-      current_vat_reserve = vat_reserve_cents(as_of: @as_of)
+      current_vat_debit = vat_debit_cents(as_of: @as_of)
+      current_vat_credit = vat_credit_cents(as_of: @as_of)
+      current_vat_reserve = [ current_vat_debit - current_vat_credit - vat_payments_cents(as_of: @as_of), 0 ].max
       current_tax_reserve = tax_reserve_cents(as_of: @as_of)
       current_committed_outflows = committed_outflows_cents(after: @as_of, through: horizon_date)
       current_confirmed_inflows = confirmed_inflows_cents(after: @as_of, through: horizon_date)
@@ -76,6 +80,8 @@ module BusinessCashflow
         horizon_date: horizon_date,
         bank_balance_cents: current_bank_balance,
         vat_reserve_cents: current_vat_reserve,
+        vat_debit_cents: current_vat_debit,
+        vat_credit_cents: current_vat_credit,
         tax_reserve_cents: current_tax_reserve,
         committed_outflows_cents: current_committed_outflows,
         confirmed_inflows_cents: current_confirmed_inflows,
@@ -116,29 +122,7 @@ module BusinessCashflow
       end
 
       def account_balance_as_of_cents(account)
-        balance = account.balances
-                         .where(currency: @settings.currency)
-                         .where("date <= ?", @as_of)
-                         .order(date: :desc)
-                         .first
-        return money_to_cents(balance.end_balance) if balance
-
-        anchor = latest_valuation_anchor_for(account)
-        if anchor
-          return money_to_cents(anchor.amount) + account_transaction_effect_cents(
-            account,
-            after: anchor.date,
-            through: @as_of
-          )
-        end
-
-        latest_balance = account.balances.where(currency: @settings.currency).order(date: :desc).first
-        latest_balance_cents = money_to_cents(latest_balance&.end_balance || account.balance)
-        latest_balance_cents - account_transaction_effect_cents(
-          account,
-          after: @as_of,
-          through: latest_balance&.date || Date.new(9999, 12, 31)
-        )
+        money_to_cents(account.balance_as_of(@as_of))
       end
 
       def actual_manual_event_effects_cents
@@ -149,24 +133,36 @@ module BusinessCashflow
       end
 
       def vat_reserve_cents(as_of:)
-        debit = events.where(kind: "income", vat_direction: "debit")
-                      .where(status: %w[confirmed received late])
-                      .where("event_date <= ?", as_of)
-                      .sum(:vat_amount_cents)
-        debit += transaction_vat_debit_cents(through: as_of)
+        [ vat_debit_cents(as_of:) - vat_credit_cents(as_of:) - vat_payments_cents(as_of:), 0 ].max
+      end
 
-        credit = events.where(kind: "expense", vat_direction: "credit")
-                       .where(status: %w[committed paid])
-                       .where("event_date <= ?", as_of)
-                       .sum(:vat_amount_cents)
-        credit += transaction_vat_credit_cents(through: as_of)
+      def vat_debit_cents(as_of:)
+        event_vat_debit_cents(as_of:) + transaction_vat_debit_cents(through: as_of)
+      end
 
-        paid = events.where(kind: "tax_payment")
-                     .where(status: "paid")
-                     .where("event_date <= ?", as_of)
-                     .sum(:amount_cents)
+      def vat_credit_cents(as_of:)
+        event_vat_credit_cents(as_of:) + transaction_vat_credit_cents(through: as_of)
+      end
 
-        [ debit - credit - paid, 0 ].max
+      def event_vat_debit_cents(as_of:)
+        events.where(kind: "income", vat_direction: "debit")
+              .where(status: %w[confirmed received late])
+              .where("event_date <= ?", as_of)
+              .sum(:vat_amount_cents)
+      end
+
+      def event_vat_credit_cents(as_of:)
+        events.where(kind: "expense", vat_direction: "credit")
+              .where(status: %w[committed paid])
+              .where("event_date <= ?", as_of)
+              .sum(:vat_amount_cents)
+      end
+
+      def vat_payments_cents(as_of:)
+        events.where(kind: "tax_payment")
+              .where(status: "paid")
+              .where("event_date <= ?", as_of)
+              .sum(:amount_cents)
       end
 
       def tax_reserve_cents(as_of:)
@@ -365,25 +361,6 @@ module BusinessCashflow
           .sum { |entry| entry_bank_effect_cents(entry).negative? ? transaction_business_stamp_duty_cents(entry.entryable) : 0 }
 
         [ debit - credit, 0 ].max
-      end
-
-      def latest_valuation_anchor_for(account)
-        account.entries
-               .where(entryable_type: "Valuation")
-               .where("date <= ?", @as_of)
-               .order(date: :desc)
-               .first
-      end
-
-      def account_transaction_effect_cents(account, after:, through:)
-        return 0 if through <= after
-
-        account.entries
-               .preload(:account)
-               .joins("INNER JOIN transactions ON transactions.id = entries.entryable_id AND entries.entryable_type = 'Transaction'")
-               .where(currency: @settings.currency)
-               .where(date: (after + 1.day)..through)
-               .sum { |entry| entry_bank_effect_cents(entry) }
       end
 
       def linked_business_cashflow_transaction_ids

@@ -420,6 +420,14 @@ class Account < ApplicationRecord
     first_valuation&.amount_money || balance_money
   end
 
+  def balance_as_of(date = Date.current)
+    Account::BalanceAsOf.new(self, date: date).balance
+  end
+
+  def balance_as_of_money(date = Date.current)
+    Money.new(balance_as_of(date), currency)
+  end
+
   # Get short version of the subtype label
   def short_subtype_label
     accountable_class.short_subtype_label_for(subtype) || accountable_class.display_name

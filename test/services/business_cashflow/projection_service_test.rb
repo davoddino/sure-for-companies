@@ -121,9 +121,49 @@ module BusinessCashflow
       result = BusinessCashflow::ProjectionService.new(@family, as_of: @as_of).call
 
       assert_equal 322_000, result.bank_balance_cents
+      assert_equal 44_000, result.vat_debit_cents
+      assert_equal 22_000, result.vat_credit_cents
       assert_equal 22_000, result.vat_reserve_cents
       assert_equal 200, result.tax_reserve_cents
       assert_equal 299_800, result.free_cash_cents
+    end
+
+    test "VAT credit remains visible when expense VAT exceeds income VAT" do
+      account = @family.accounts.create!(
+        name: "EUR bank",
+        balance: 8780,
+        currency: "EUR",
+        classification: "asset",
+        accountable: Depository.new
+      )
+
+      income = Transaction.new
+      income.business_vat_amount = "100.00"
+
+      account.entries.create!(
+        name: "Small client invoice",
+        date: @as_of,
+        amount: -1100,
+        currency: "EUR",
+        entryable: income
+      )
+
+      expense = Transaction.new
+      expense.business_vat_amount = "220.00"
+
+      account.entries.create!(
+        name: "Supplier bill",
+        date: @as_of,
+        amount: 1220,
+        currency: "EUR",
+        entryable: expense
+      )
+
+      result = BusinessCashflow::ProjectionService.new(@family, as_of: @as_of).call
+
+      assert_equal 10_000, result.vat_debit_cents
+      assert_equal 22_000, result.vat_credit_cents
+      assert_equal 0, result.vat_reserve_cents
     end
 
     test "bank balance uses as-of balance while future transactions reduce free cash" do

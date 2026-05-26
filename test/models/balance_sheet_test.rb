@@ -61,6 +61,22 @@ class BalanceSheetTest < ActiveSupport::TestCase
     assert_equal 5000, asset_groups.find { |ag| ag.name == OtherAsset.display_name }.total
   end
 
+  test "asset group totals exclude future transactions from current balance" do
+    account = create_account(balance: 5800, accountable: Depository.new)
+
+    account.entries.create!(
+      name: "Future client payment",
+      date: Date.current + 10.days,
+      amount: -3300,
+      currency: "USD",
+      entryable: Transaction.new
+    )
+
+    asset_groups = BalanceSheet.new(@family).assets.account_groups
+
+    assert_equal 2500, asset_groups.find { |ag| ag.name == Depository.display_name }.total
+  end
+
   test "calculates liability group totals" do
     create_account(balance: 1000, accountable: CreditCard.new)
     create_account(balance: 2000, accountable: CreditCard.new)
