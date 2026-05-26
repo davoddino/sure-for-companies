@@ -86,6 +86,46 @@ module BusinessCashflow
       assert_equal 1_000_000, result.free_cash_cents
     end
 
+    test "transaction VAT and stamp duty metadata feed reserves and free cash" do
+      account = @family.accounts.create!(
+        name: "EUR bank",
+        balance: 3220,
+        currency: "EUR",
+        classification: "asset",
+        accountable: Depository.new
+      )
+
+      income = Transaction.new
+      income.business_vat_amount = "440.00"
+      income.business_stamp_duty_amount = "2.00"
+
+      account.entries.create!(
+        name: "Client invoice",
+        date: @as_of,
+        amount: -4440,
+        currency: "EUR",
+        entryable: income
+      )
+
+      expense = Transaction.new
+      expense.business_vat_amount = "220.00"
+
+      account.entries.create!(
+        name: "Supplier bill",
+        date: @as_of,
+        amount: 1220,
+        currency: "EUR",
+        entryable: expense
+      )
+
+      result = BusinessCashflow::ProjectionService.new(@family, as_of: @as_of).call
+
+      assert_equal 322_000, result.bank_balance_cents
+      assert_equal 22_000, result.vat_reserve_cents
+      assert_equal 200, result.tax_reserve_cents
+      assert_equal 299_800, result.free_cash_cents
+    end
+
     test "bank balance uses as-of balance while future transactions reduce free cash" do
       account = @family.accounts.create!(
         name: "EUR bank",
