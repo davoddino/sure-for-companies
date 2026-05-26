@@ -86,6 +86,49 @@ module BusinessCashflow
       assert_equal 1_000_000, result.free_cash_cents
     end
 
+    test "bank balance uses as-of balance while future transactions reduce free cash" do
+      account = @family.accounts.create!(
+        name: "EUR bank",
+        balance: 900,
+        currency: "EUR",
+        classification: "asset",
+        accountable: Depository.new
+      )
+
+      account.balances.create!(
+        date: @as_of,
+        balance: 1000,
+        currency: "EUR",
+        start_cash_balance: 1000,
+        flows_factor: 1
+      )
+
+      account.entries.create!(
+        name: "Future supplier payment",
+        date: @as_of + 10.days,
+        amount: 100,
+        currency: "EUR",
+        entryable: Transaction.new
+      )
+
+      account.balances.create!(
+        date: @as_of + 10.days,
+        balance: 900,
+        currency: "EUR",
+        start_cash_balance: 1000,
+        cash_outflows: 100,
+        flows_factor: 1
+      )
+
+      result = BusinessCashflow::ProjectionService.new(@family, as_of: @as_of).call
+
+      assert_equal 100_000, result.bank_balance_cents
+      assert_equal 10_000, result.committed_outflows_cents
+      assert_equal 90_000, result.free_cash_cents
+      assert_equal 90_000, result.projected_bank_balance_cents
+      assert_equal "Future supplier payment", result.timeline.first.event.name
+    end
+
     test "returns next open VAT deadline" do
       BusinessCashflow::TaxPeriod.generate_quarterly_defaults!(@family, years: [ 2026 ])
 

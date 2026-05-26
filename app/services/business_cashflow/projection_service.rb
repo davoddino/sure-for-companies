@@ -30,6 +30,19 @@ module BusinessCashflow
       keyword_init: true
     )
 
+    ForecastTransactionEvent = Struct.new(
+      :entry,
+      :kind,
+      :status,
+      :name,
+      :amount_cents,
+      :vat_amount_cents,
+      :vat_direction,
+      :event_date,
+      :bank_effect_cents,
+      keyword_init: true
+    )
+
     def initialize(family, as_of: Date.current, settings: nil, horizon_days: nil, starting_bank_balance_cents: nil)
       @family = family
       @as_of = as_of
@@ -85,18 +98,30 @@ module BusinessCashflow
         @events ||= @family.business_cashflow_events.active.where(currency: @settings.currency)
       end
 
+      def bank_accounts
+        @bank_accounts ||= @family.accounts
+                                  .visible
+                                  .where(currency: @settings.currency, accountable_type: "Depository")
+      end
+
       def bank_balance_cents
         baseline = @starting_bank_balance_cents || account_balance_cents
         baseline + actual_manual_event_effects_cents
       end
 
       def account_balance_cents
-        @family.accounts
-               .visible
-               .where(currency: @settings.currency, accountable_type: "Depository")
-               .sum(:balance)
-               .to_d
-               .then { |amount| (amount * 100).round }
+        bank_accounts.sum { |account| account_balance_as_of_cents(account) }
+      end
+
+      def account_balance_as_of_cents(account)
+        balance = account.balances
+                         .where(currency: @settings.currency)
+                         .where("date <= ?", @as_of)
+                         .order(date: :desc)
+                         .first
+
+        amount = balance&.end_balance || account.balance
+        money_to_cents(amount)
       end
 
       def actual_manual_event_effects_cents
@@ -136,16 +161,20 @@ module BusinessCashflow
         statuses = [ "committed" ]
         statuses << "planned" if @settings.include_planned_outflows_in_free_cash?
 
-        events.where(direction: "outflow", status: statuses)
-              .where(event_date: (after + 1.day)..through)
-              .where.not(kind: %w[tax_payment reserve_adjustment])
-              .sum(:amount_cents)
+        event_outflows = events.where(direction: "outflow", status: statuses)
+                               .where(event_date: (after + 1.day)..through)
+                               .where.not(kind: %w[tax_payment reserve_adjustment])
+                               .sum(:amount_cents)
+
+        event_outflows + future_transaction_outflows_cents(after:, through:)
       end
 
       def confirmed_inflows_cents(after:, through:)
-        events.where(direction: "inflow", status: "confirmed")
-              .where(event_date: (after + 1.day)..through)
-              .sum(:amount_cents)
+        event_inflows = events.where(direction: "inflow", status: "confirmed")
+                              .where(event_date: (after + 1.day)..through)
+                              .sum(:amount_cents)
+
+        event_inflows + future_transaction_inflows_cents(after:, through:)
       end
 
       def forecast_events
@@ -153,9 +182,12 @@ module BusinessCashflow
         included_statuses << "paid"
         included_statuses << "received"
 
-        events.where(status: included_statuses)
-              .where(event_date: (@as_of + 1.day)..horizon_date)
-              .chronological
+        business_events = events.where(status: included_statuses)
+                                .where(event_date: (@as_of + 1.day)..horizon_date)
+                                .to_a
+
+        (business_events + future_transaction_forecast_events(after: @as_of, through: horizon_date))
+          .sort_by { |event| [ event.event_date, event.name.to_s ] }
       end
 
       def build_timeline(bank_balance_cents:, vat_reserve_cents:, tax_reserve_cents:, committed_outflows_cents:, confirmed_inflows_cents:)
@@ -208,6 +240,71 @@ module BusinessCashflow
         else
           current_reserve
         end
+      end
+
+      def future_transaction_outflows_cents(after:, through:)
+        future_transaction_entries(after:, through:)
+          .sum { |entry| [ -entry_bank_effect_cents(entry), 0 ].max }
+      end
+
+      def future_transaction_inflows_cents(after:, through:)
+        future_transaction_entries(after:, through:)
+          .sum { |entry| [ entry_bank_effect_cents(entry), 0 ].max }
+      end
+
+      def future_transaction_forecast_events(after:, through:)
+        future_transaction_entries(after:, through:).map do |entry|
+          bank_effect_cents = entry_bank_effect_cents(entry)
+
+          ForecastTransactionEvent.new(
+            entry: entry,
+            kind: "transaction",
+            status: bank_effect_cents.negative? ? "committed" : "confirmed",
+            name: entry.name,
+            amount_cents: bank_effect_cents.abs,
+            vat_amount_cents: transaction_business_vat_cents(entry.entryable),
+            vat_direction: "none",
+            event_date: entry.date,
+            bank_effect_cents: bank_effect_cents
+          )
+        end
+      end
+
+      def future_transaction_entries(after:, through:)
+        @future_transaction_entries ||= {}
+        @future_transaction_entries[[ after, through ]] ||= begin
+          @family.entries
+                 .preload(:account, :entryable)
+                 .joins(:account)
+                 .joins("INNER JOIN transactions ON transactions.id = entries.entryable_id AND entries.entryable_type = 'Transaction'")
+                 .where(accounts: { status: %w[draft active], currency: @settings.currency, accountable_type: "Depository" })
+                 .where(entries: { currency: @settings.currency, excluded: false })
+                 .where(date: (after + 1.day)..through)
+                 .where.not(transactions: { kind: "funds_movement" })
+                 .where.not(entryable_id: linked_business_cashflow_transaction_ids)
+                 .to_a
+        end
+      end
+
+      def linked_business_cashflow_transaction_ids
+        events.where.not(linked_transaction_id: nil).select(:linked_transaction_id)
+      end
+
+      def entry_bank_effect_cents(entry)
+        amount = entry.amount.to_d
+        effect = entry.account.asset? || !entry.account.liability? ? -amount : amount
+
+        money_to_cents(effect)
+      end
+
+      def transaction_business_vat_cents(transaction)
+        return 0 unless transaction.respond_to?(:business_vat_amount)
+
+        money_to_cents(transaction.business_vat_amount.presence || 0)
+      end
+
+      def money_to_cents(amount)
+        (amount.to_d * 100).round
       end
 
       def next_tax_deadline
