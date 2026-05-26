@@ -1,0 +1,8 @@
+services:
+  web:
+    build:
+      context: .
+    image: cavadalabs-cashflow:local
+
+  worker:
+    image: cavadalabs-cashflow:local

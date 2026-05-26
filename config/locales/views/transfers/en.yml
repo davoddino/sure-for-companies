@@ -7,6 +7,10 @@ en:
       success: Transfer removed
     form:
       amount: Amount
+      business_stamp_duty_amount: Stamp duty / other tax
+      business_tax_notes: Fiscal notes
+      business_tax_notes_placeholder: VAT, stamp duty, F24, or other tax details
+      business_vat_amount: VAT amount
       calculate_rate_tab: Calculate FX rate
       convert_tab: Convert with FX rate
       date: Date
@@ -16,6 +20,7 @@ en:
       exchange_rate_display: "Exchange rate: %{rate}"
       exchange_rate_help: Choose how to enter the transfer amount.
       expense: Expense
+      fiscal_details: Fiscal details
       from: From
       income: Income
       select_account: Select account
@@ -43,6 +48,10 @@ en:
       to: To
       date: Date
       amount: Amount
+      business_stamp_duty_amount: Stamp duty / other tax
+      business_tax_notes: Fiscal notes
+      business_tax_notes_placeholder: VAT, stamp duty, F24, or other tax details
+      business_vat_amount: VAT amount
       category: Category
       uncategorized: Uncategorized
     update:

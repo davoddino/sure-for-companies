@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.2].define(version: 2026_05_19_100000) do
+ActiveRecord::Schema[7.2].define(version: 2026_05_26_090200) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pgcrypto"
   enable_extension "plpgsql"
@@ -306,6 +306,80 @@ ActiveRecord::Schema[7.2].define(version: 2026_05_19_100000) do
     t.datetime "updated_at", null: false
     t.index ["family_id"], name: "index_brex_items_on_family_id"
     t.index ["status"], name: "index_brex_items_on_status"
+  end
+
+  create_table "business_cashflow_events", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
+    t.uuid "family_id", null: false
+    t.uuid "account_id"
+    t.uuid "tax_period_id"
+    t.string "kind", null: false
+    t.string "status", default: "planned", null: false
+    t.string "name", null: false
+    t.string "counterparty"
+    t.bigint "amount_cents", default: 0, null: false
+    t.string "direction", null: false
+    t.string "currency", default: "EUR", null: false
+    t.date "event_date", null: false
+    t.date "payment_date"
+    t.bigint "vat_amount_cents", default: 0, null: false
+    t.string "vat_direction", default: "none", null: false
+    t.bigint "net_amount_cents"
+    t.decimal "vat_rate", precision: 5, scale: 2
+    t.boolean "vat_manual", default: false, null: false
+    t.string "category"
+    t.string "recurrence_rule"
+    t.string "source", default: "manual", null: false
+    t.uuid "linked_transaction_id"
+    t.text "notes"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["account_id"], name: "index_business_cashflow_events_on_account_id"
+    t.index ["currency"], name: "index_business_cashflow_events_on_currency"
+    t.index ["family_id", "event_date"], name: "index_business_cashflow_events_on_family_id_and_event_date"
+    t.index ["family_id", "kind"], name: "index_business_cashflow_events_on_family_id_and_kind"
+    t.index ["family_id", "status"], name: "index_business_cashflow_events_on_family_id_and_status"
+    t.index ["family_id"], name: "index_business_cashflow_events_on_family_id"
+    t.index ["linked_transaction_id"], name: "index_business_cashflow_events_on_linked_transaction_id"
+    t.index ["tax_period_id"], name: "index_business_cashflow_events_on_tax_period_id"
+  end
+
+  create_table "business_cashflow_settings", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
+    t.uuid "family_id", null: false
+    t.string "vat_regime", default: "quarterly", null: false
+    t.boolean "include_confirmed_income_in_free_cash", default: false, null: false
+    t.boolean "include_planned_outflows_in_free_cash", default: false, null: false
+    t.integer "planning_horizon_days", default: 90, null: false
+    t.decimal "default_vat_rate", precision: 5, scale: 2, default: "22.0", null: false
+    t.string "country", default: "IT", null: false
+    t.string "currency", default: "EUR", null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["family_id"], name: "index_business_cashflow_settings_on_family_id", unique: true
+  end
+
+  create_table "business_cashflow_tax_periods", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
+    t.uuid "family_id", null: false
+    t.string "kind", default: "vat", null: false
+    t.string "period_type", default: "quarterly", null: false
+    t.string "period_key", null: false
+    t.integer "year", null: false
+    t.integer "quarter"
+    t.integer "month"
+    t.date "start_date", null: false
+    t.date "end_date", null: false
+    t.date "due_date", null: false
+    t.string "status", default: "open", null: false
+    t.bigint "vat_debit_cents", default: 0, null: false
+    t.bigint "vat_credit_cents", default: 0, null: false
+    t.bigint "vat_due_cents", default: 0, null: false
+    t.bigint "manual_adjustment_cents", default: 0, null: false
+    t.text "notes"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["family_id", "due_date"], name: "index_business_cashflow_tax_periods_on_family_id_and_due_date"
+    t.index ["family_id", "kind", "period_type", "period_key"], name: "idx_business_cashflow_tax_periods_unique_key", unique: true
+    t.index ["family_id"], name: "index_business_cashflow_tax_periods_on_family_id"
+    t.index ["status"], name: "index_business_cashflow_tax_periods_on_status"
   end
 
   create_table "budget_categories", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
@@ -1894,6 +1968,12 @@ ActiveRecord::Schema[7.2].define(version: 2026_05_19_100000) do
   add_foreign_key "binance_items", "families"
   add_foreign_key "brex_accounts", "brex_items"
   add_foreign_key "brex_items", "families"
+  add_foreign_key "business_cashflow_events", "accounts"
+  add_foreign_key "business_cashflow_events", "business_cashflow_tax_periods", column: "tax_period_id"
+  add_foreign_key "business_cashflow_events", "families"
+  add_foreign_key "business_cashflow_events", "transactions", column: "linked_transaction_id"
+  add_foreign_key "business_cashflow_settings", "families"
+  add_foreign_key "business_cashflow_tax_periods", "families"
   add_foreign_key "budget_categories", "budgets"
   add_foreign_key "budget_categories", "categories"
   add_foreign_key "budgets", "families"

@@ -21,6 +21,12 @@ class Transaction < ApplicationRecord
     image/jpeg image/jpg image/png image/gif image/webp
     application/pdf
   ].freeze
+  BUSINESS_CASHFLOW_EXTRA_KEY = "business_cashflow"
+  BUSINESS_TAX_ATTRIBUTES = %i[business_vat_amount business_stamp_duty_amount business_tax_notes].freeze
+  BUSINESS_TAX_AMOUNT_KEYS = {
+    business_vat_amount: "vat_amount",
+    business_stamp_duty_amount: "stamp_duty_amount"
+  }.freeze
 
   validate :validate_attachments, if: -> { attachments.attached? }
 
@@ -50,6 +56,39 @@ class Transaction < ApplicationRecord
   end
 
   validate :exchange_rate_must_be_valid
+  validate :business_tax_amounts_must_be_valid
+
+  def business_vat_amount
+    business_cashflow_extra["vat_amount"]
+  end
+
+  def business_vat_amount=(value)
+    write_business_cashflow_extra("vat_amount", normalize_business_tax_amount(value))
+  end
+
+  def business_stamp_duty_amount
+    business_cashflow_extra["stamp_duty_amount"]
+  end
+
+  def business_stamp_duty_amount=(value)
+    write_business_cashflow_extra("stamp_duty_amount", normalize_business_tax_amount(value))
+  end
+
+  def business_tax_notes
+    business_cashflow_extra["tax_notes"]
+  end
+
+  def business_tax_notes=(value)
+    write_business_cashflow_extra("tax_notes", value.to_s.strip.presence)
+  end
+
+  def assign_business_tax_attributes(attributes)
+    attributes = attributes.to_h.with_indifferent_access
+
+    BUSINESS_TAX_ATTRIBUTES.each do |attribute|
+      public_send("#{attribute}=", attributes[attribute]) if attributes.key?(attribute)
+    end
+  end
 
   private
 
@@ -62,6 +101,58 @@ class Transaction < ApplicationRecord
           errors.add(:exchange_rate, "must be greater than 0")
         end
       end
+    end
+
+    def business_tax_amounts_must_be_valid
+      BUSINESS_TAX_AMOUNT_KEYS.each do |attribute, key|
+        value = business_cashflow_extra[key]
+        next if value.blank?
+
+        amount = BigDecimal(value.to_s) rescue nil
+
+        if amount.nil? || !amount.finite?
+          errors.add(attribute, "must be a number")
+        elsif amount.negative?
+          errors.add(attribute, "must be greater than or equal to 0")
+        end
+      end
+    end
+
+    def business_cashflow_extra
+      data = extra.is_a?(Hash) ? extra : {}
+      metadata = data[BUSINESS_CASHFLOW_EXTRA_KEY]
+
+      metadata.is_a?(Hash) ? metadata : {}
+    end
+
+    def write_business_cashflow_extra(key, value)
+      data = extra.is_a?(Hash) ? extra.deep_dup : {}
+      metadata = data[BUSINESS_CASHFLOW_EXTRA_KEY].is_a?(Hash) ? data[BUSINESS_CASHFLOW_EXTRA_KEY].dup : {}
+
+      if value.blank?
+        metadata.delete(key)
+      else
+        metadata[key] = value
+      end
+
+      if metadata.blank?
+        data.delete(BUSINESS_CASHFLOW_EXTRA_KEY)
+      else
+        data[BUSINESS_CASHFLOW_EXTRA_KEY] = metadata
+      end
+
+      self.extra = data
+    end
+
+    def normalize_business_tax_amount(value)
+      return nil if value.blank?
+
+      amount = BigDecimal(value.to_s)
+      raise ArgumentError unless amount.finite?
+
+      amount.to_s("F")
+    rescue ArgumentError
+      value.to_s
     end
 
   public

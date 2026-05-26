@@ -18,11 +18,38 @@ class TransfersControllerTest < ActionDispatch::IntegrationTest
           to_account_id: accounts(:credit_card).id,
           date: Date.current,
           amount: 100,
-          name: "Test Transfer"
+          name: "Test Transfer",
+          business_vat_amount: "22.50",
+          business_stamp_duty_amount: "2.00",
+          business_tax_notes: "Transfer tax metadata"
         }
       }
       assert_enqueued_with job: SyncJob
     end
+
+    transfer = Transfer.order(:created_at).last
+    assert_equal "22.5", transfer.business_vat_amount
+    assert_equal "2.0", transfer.business_stamp_duty_amount
+    assert_equal "Transfer tax metadata", transfer.business_tax_notes
+  end
+
+  test "can create transfer with future date" do
+    future_date = Date.current + 30.days
+
+    assert_difference "Transfer.count", 1 do
+      post transfers_url, params: {
+        transfer: {
+          from_account_id: accounts(:depository).id,
+          to_account_id: accounts(:credit_card).id,
+          date: future_date,
+          amount: 100
+        }
+      }
+    end
+
+    transfer = Transfer.order(:created_at).last
+    assert_equal future_date, transfer.outflow_transaction.entry.date
+    assert_equal future_date, transfer.inflow_transaction.entry.date
   end
 
   test "can create transfer with custom exchange rate" do
@@ -172,11 +199,21 @@ class TransfersControllerTest < ActionDispatch::IntegrationTest
     transfer = transfers(:one)
     assert_nil transfer.notes
 
-    patch transfer_url(transfer), params: { transfer: { notes: "Test notes" } }
+    patch transfer_url(transfer), params: {
+      transfer: {
+        notes: "Test notes",
+        business_vat_amount: "10.00",
+        business_stamp_duty_amount: "2.00",
+        business_tax_notes: "Updated transfer taxes"
+      }
+    }
 
     assert_redirected_to transactions_url
     assert_equal "Transfer updated", flash[:notice]
     assert_equal "Test notes", transfer.reload.notes
+    assert_equal "10.0", transfer.business_vat_amount
+    assert_equal "2.0", transfer.business_stamp_duty_amount
+    assert_equal "Updated transfer taxes", transfer.business_tax_notes
   end
 
   test "handles rejection without FrozenError" do

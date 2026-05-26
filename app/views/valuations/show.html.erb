@@ -20,8 +20,7 @@
               data: { turbo_frame: :modal },
               class: "space-y-4" do |f| %>
           <%= f.date_field :date,
-                label: t(".date_label"),
-                max: Date.current %>
+                label: t(".date_label") %>
           <%= f.money_field :amount,
                 label: t(".amount_label"),
                 disable_currency: true %>

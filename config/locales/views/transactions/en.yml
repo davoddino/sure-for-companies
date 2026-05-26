@@ -32,6 +32,10 @@ en:
       category: Category
       category_label: Category
       category_prompt: Select a Category
+      business_stamp_duty_amount: Stamp duty / other tax
+      business_tax_notes: Fiscal notes
+      business_tax_notes_placeholder: VAT, stamp duty, F24, or other tax details
+      business_vat_amount: VAT amount
       date: Date
       description: Description
       description_placeholder: Describe transaction
@@ -62,6 +66,10 @@ en:
       transfer: Transfer
       account_label: Account
       amount: Amount
+      business_stamp_duty_amount: Stamp duty / other tax
+      business_tax_notes: Fiscal notes
+      business_tax_notes_placeholder: VAT, stamp duty, F24, or other tax details
+      business_vat_amount: VAT amount
       category_label: Category
       date_label: Date
       delete: Delete

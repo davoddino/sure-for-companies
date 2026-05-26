@@ -22,7 +22,10 @@ class TransactionsControllerTest < ActionDispatch::IntegrationTest
           entryable_attributes: {
             tag_ids: [ tags(:one).id, tags(:two).id ],
             category_id: Category.first.id,
-            merchant_id: Merchant.first.id
+            merchant_id: Merchant.first.id,
+            business_vat_amount: "22.50",
+            business_stamp_duty_amount: "2.00",
+            business_tax_notes: "Invoice VAT and stamp duty"
           }
         }
       }
@@ -32,7 +35,33 @@ class TransactionsControllerTest < ActionDispatch::IntegrationTest
 
     assert_redirected_to account_url(created_entry.account)
     assert_equal "Transaction created", flash[:notice]
+    assert_equal "22.5", created_entry.entryable.business_vat_amount
+    assert_equal "2.0", created_entry.entryable.business_stamp_duty_amount
+    assert_equal "Invoice VAT and stamp duty", created_entry.entryable.business_tax_notes
     assert_enqueued_with(job: SyncJob)
+  end
+
+  test "creates transaction with future date" do
+    future_date = Date.current + 30.days
+
+    assert_difference [ "Entry.count", "Transaction.count" ], 1 do
+      post transactions_url, params: {
+        entry: {
+          account_id: @entry.account_id,
+          name: "Future transaction",
+          date: future_date,
+          currency: "USD",
+          amount: 100,
+          nature: "outflow",
+          entryable_type: @entry.entryable_type,
+          entryable_attributes: {
+            category_id: Category.first.id
+          }
+        }
+      }
+    end
+
+    assert_equal future_date, Entry.order(:created_at).last.date
   end
 
   test "updates with transaction details" do
@@ -51,7 +80,10 @@ class TransactionsControllerTest < ActionDispatch::IntegrationTest
             id: @entry.entryable_id,
             tag_ids: [ tags(:one).id, tags(:two).id ],
             category_id: Category.first.id,
-            merchant_id: Merchant.first.id
+            merchant_id: Merchant.first.id,
+            business_vat_amount: "10.00",
+            business_stamp_duty_amount: "2.00",
+            business_tax_notes: "Updated fiscal metadata"
           }
         }
       }
@@ -66,6 +98,9 @@ class TransactionsControllerTest < ActionDispatch::IntegrationTest
     assert_equal [ tags(:one).id, tags(:two).id ].sort, @entry.entryable.tag_ids.sort
     assert_equal Category.first.id, @entry.entryable.category_id
     assert_equal Merchant.first.id, @entry.entryable.merchant_id
+    assert_equal "10.0", @entry.entryable.business_vat_amount
+    assert_equal "2.0", @entry.entryable.business_stamp_duty_amount
+    assert_equal "Updated fiscal metadata", @entry.entryable.business_tax_notes
     assert_equal "test notes", @entry.notes
     assert_equal false, @entry.excluded
 

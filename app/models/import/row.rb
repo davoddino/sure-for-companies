@@ -143,10 +143,9 @@ class Import::Row < ApplicationRecord
       end
 
       min_date = Entry.min_supported_date
-      max_date = Date.current
 
-      if parsed_date < min_date || parsed_date > max_date
-        errors.add(:date, "must be between #{min_date} and #{max_date}")
+      if parsed_date < min_date
+        errors.add(:date, "must be on or after #{min_date}")
       end
     end
 

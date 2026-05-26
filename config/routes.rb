@@ -294,6 +294,8 @@ Rails.application.routes.draw do
     get :picker, on: :collection
   end
 
+  get "business-cashflow", to: "business_cashflows#show", as: :business_cashflow
+
   resources :budgets, only: %i[index show edit update], param: :month_year do
     post :copy_previous, on: :member
     get :picker, on: :collection

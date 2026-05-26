@@ -157,6 +157,54 @@ class TransactionTest < ActiveSupport::TestCase
     assert transaction.valid?
   end
 
+  test "business tax metadata is stored in extra" do
+    transaction = Transaction.new
+
+    transaction.business_vat_amount = "440.00"
+    transaction.business_stamp_duty_amount = "2.00"
+    transaction.business_tax_notes = "Quarterly VAT"
+
+    assert_equal "440.0", transaction.business_vat_amount
+    assert_equal "2.0", transaction.business_stamp_duty_amount
+    assert_equal "Quarterly VAT", transaction.business_tax_notes
+    assert_equal(
+      {
+        "vat_amount" => "440.0",
+        "stamp_duty_amount" => "2.0",
+        "tax_notes" => "Quarterly VAT"
+      },
+      transaction.extra["business_cashflow"]
+    )
+  end
+
+  test "business tax metadata clears blank values" do
+    transaction = Transaction.new(
+      extra: {
+        "business_cashflow" => {
+          "vat_amount" => "440.0",
+          "stamp_duty_amount" => "2.0",
+          "tax_notes" => "Quarterly VAT"
+        }
+      }
+    )
+
+    transaction.business_vat_amount = ""
+    transaction.business_stamp_duty_amount = nil
+    transaction.business_tax_notes = " "
+
+    assert_empty transaction.extra
+  end
+
+  test "business tax amount validation rejects invalid values" do
+    transaction = Transaction.new(category: categories(:income))
+    transaction.business_vat_amount = "not a number"
+    transaction.business_stamp_duty_amount = "-1"
+
+    assert_not transaction.valid?
+    assert_includes transaction.errors[:business_vat_amount], "must be a number"
+    assert_includes transaction.errors[:business_stamp_duty_amount], "must be greater than or equal to 0"
+  end
+
   test "activity_security returns the referenced security from extra metadata" do
     security = securities(:aapl)
     transaction = Transaction.new(extra: { "security_id" => security.id })

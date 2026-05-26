@@ -38,7 +38,8 @@ class TransfersController < ApplicationController
       destination_account_id: destination_account.id,
       date: transfer_params[:date].present? ? Date.parse(transfer_params[:date]) : Date.current,
       amount: transfer_params[:amount].to_d,
-      exchange_rate: transfer_params[:exchange_rate].presence&.to_d
+      exchange_rate: transfer_params[:exchange_rate].presence&.to_d,
+      business_tax_attributes: transfer_params.slice(*Transaction::BUSINESS_TAX_ATTRIBUTES)
     ).create
 
     if @transfer.persisted?
@@ -160,7 +161,10 @@ class TransfersController < ApplicationController
     end
 
     def transfer_params
-      params.require(:transfer).permit(:from_account_id, :to_account_id, :amount, :date, :name, :excluded, :exchange_rate)
+      params.require(:transfer).permit(
+        :from_account_id, :to_account_id, :amount, :date, :name, :excluded, :exchange_rate,
+        *Transaction::BUSINESS_TAX_ATTRIBUTES
+      )
     end
 
     def set_accounts
@@ -173,7 +177,7 @@ class TransfersController < ApplicationController
     end
 
     def transfer_update_params
-      params.require(:transfer).permit(:notes, :status, :category_id)
+      params.require(:transfer).permit(:notes, :status, :category_id, *Transaction::BUSINESS_TAX_ATTRIBUTES)
     end
 
     def update_transfer_status
@@ -186,6 +190,8 @@ class TransfersController < ApplicationController
 
     def update_transfer_details
       @transfer.outflow_transaction.update!(category_id: transfer_update_params[:category_id])
+      @transfer.assign_business_tax_attributes(transfer_update_params)
+      @transfer.save_business_tax_attributes!
       @transfer.update!(notes: transfer_update_params[:notes])
     end
 end

@@ -1,10 +1,11 @@
 class Transfer::Creator
-  def initialize(family:, source_account_id:, destination_account_id:, date:, amount:, exchange_rate: nil)
+  def initialize(family:, source_account_id:, destination_account_id:, date:, amount:, exchange_rate: nil, business_tax_attributes: {})
     @family = family
     @source_account = family.accounts.find(source_account_id) # early throw if not found
     @destination_account = family.accounts.find(destination_account_id) # early throw if not found
     @date = date
     @amount = amount.to_d
+    @business_tax_attributes = business_tax_attributes
 
     if exchange_rate.present?
       rate_value = exchange_rate.to_d
@@ -31,13 +32,13 @@ class Transfer::Creator
   end
 
   private
-    attr_reader :family, :source_account, :destination_account, :date, :amount, :exchange_rate
+    attr_reader :family, :source_account, :destination_account, :date, :amount, :exchange_rate, :business_tax_attributes
 
     def outflow_transaction
       name = "#{name_prefix} to #{destination_account.name}"
       kind = outflow_transaction_kind
 
-      Transaction.new(
+      transaction = Transaction.new(
         kind: kind,
         category: (investment_contributions_category if kind == "investment_contribution"),
         entry: source_account.entries.build(
@@ -48,6 +49,8 @@ class Transfer::Creator
           user_modified: true, # Protect from provider sync claiming this entry
         )
       )
+      transaction.assign_business_tax_attributes(business_tax_attributes)
+      transaction
     end
 
     def investment_contributions_category

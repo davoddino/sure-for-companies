@@ -108,6 +108,24 @@ class Transfer < ApplicationRecord
     "transfer"
   end
 
+  Transaction::BUSINESS_TAX_ATTRIBUTES.each do |attribute|
+    define_method(attribute) do
+      outflow_transaction&.public_send(attribute)
+    end
+
+    define_method("#{attribute}=") do |value|
+      outflow_transaction&.public_send("#{attribute}=", value)
+    end
+  end
+
+  def assign_business_tax_attributes(attributes)
+    outflow_transaction&.assign_business_tax_attributes(attributes)
+  end
+
+  def save_business_tax_attributes!
+    outflow_transaction&.save! if outflow_transaction&.has_changes_to_save?
+  end
+
   def categorizable?
     to_account&.accountable_type == "Loan"
   end

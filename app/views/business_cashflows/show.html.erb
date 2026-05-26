@@ -1,0 +1,120 @@
+<% title t(".title", default: "Business Cashflow") %>
+
+<% content_for :page_header do %>
+  <div class="space-y-1 mb-6">
+    <h1 class="text-xl lg:text-3xl font-medium text-primary">
+      <%= t(".title", default: "Business Cashflow") %>
+    </h1>
+    <p class="text-sm lg:text-base text-secondary">
+      <%= t(".subtitle", default: "CavadaLabs cash planning: bank balance, reserved VAT/F24 money, and free cash.") %>
+    </p>
+  </div>
+<% end %>
+
+<div class="space-y-6 pb-8">
+  <section class="grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-3 gap-4">
+    <% [
+      [ t(".metrics.bank_balance", default: "Saldo bancario"), @projection.bank_balance_cents ],
+      [ t(".metrics.free_cash", default: "Disponibilita libera"), @projection.free_cash_cents ],
+      [ t(".metrics.vat_reserve", default: "IVA accantonata"), -@projection.vat_reserve_cents ],
+      [ t(".metrics.committed_outflows", default: "Uscite impegnate"), -@projection.committed_outflows_cents ],
+      [ t(".metrics.confirmed_inflows", default: "Incassi confermati"), @projection.confirmed_inflows_cents ],
+      [ t(".metrics.lowest_bank", default: "Punto minimo previsto"), @projection.lowest_projected_bank_balance_cents ],
+      [ t(".metrics.projected_free", default: "Disponibilita a 90 giorni"), @projection.projected_free_cash_cents ]
+    ].each do |label, amount_cents| %>
+      <article class="bg-container shadow-border-xs rounded-lg p-4 min-h-32 min-w-0 flex flex-col justify-between gap-3">
+        <p class="text-sm text-secondary leading-snug"><%= label %></p>
+        <p class="text-xl lg:text-2xl font-medium text-primary tabular-nums leading-tight break-words">
+          <%= business_cashflow_signed_money(amount_cents, currency: @projection.currency) %>
+        </p>
+      </article>
+    <% end %>
+
+    <article class="bg-container shadow-border-xs rounded-lg p-4 min-h-32 min-w-0 flex flex-col justify-between gap-3">
+      <p class="text-sm text-secondary leading-snug"><%= t(".metrics.next_deadline", default: "Prossima scadenza fiscale") %></p>
+      <% if @projection.next_tax_deadline.present? %>
+        <div>
+          <p class="text-lg font-medium text-primary break-words"><%= @projection.next_tax_deadline.period_key %></p>
+          <p class="text-sm text-secondary"><%= l(@projection.next_tax_deadline.due_date) %></p>
+        </div>
+      <% else %>
+        <p class="text-lg font-medium text-primary break-words"><%= t(".metrics.no_deadline", default: "None") %></p>
+      <% end %>
+    </article>
+  </section>
+
+  <section class="space-y-3">
+    <div class="flex items-center justify-between">
+      <h2 class="text-lg font-medium text-primary"><%= t(".timeline.title", default: "Upcoming timeline") %></h2>
+      <p class="text-sm text-secondary">
+        <%= t(".timeline.horizon", default: "%{days} day horizon", days: @settings.planning_horizon_days) %>
+      </p>
+    </div>
+
+    <div class="overflow-x-auto bg-container shadow-border-xs rounded-lg">
+      <table class="min-w-full text-sm">
+        <thead class="text-secondary border-b border-divider">
+          <tr>
+            <th class="text-left font-medium p-3"><%= t(".timeline.date", default: "Date") %></th>
+            <th class="text-left font-medium p-3"><%= t(".timeline.type", default: "Type") %></th>
+            <th class="text-left font-medium p-3"><%= t(".timeline.description", default: "Description") %></th>
+            <th class="text-right font-medium p-3"><%= t(".timeline.amount", default: "Amount") %></th>
+            <th class="text-right font-medium p-3"><%= t(".timeline.vat", default: "VAT") %></th>
+            <th class="text-left font-medium p-3"><%= t(".timeline.status", default: "Status") %></th>
+            <th class="text-right font-medium p-3"><%= t(".timeline.bank", default: "Projected bank") %></th>
+            <th class="text-right font-medium p-3"><%= t(".timeline.free_cash", default: "Projected free cash") %></th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-divider">
+          <% if @projection.timeline.any? %>
+            <% @projection.timeline.each do |item| %>
+              <tr>
+                <td class="p-3 whitespace-nowrap text-primary"><%= l(item.date) %></td>
+                <td class="p-3 text-secondary"><%= item.event.kind.humanize %></td>
+                <td class="p-3 text-primary"><%= item.event.name %></td>
+                <td class="p-3 text-right <%= business_cashflow_effect_class(item.bank_effect_cents) %>">
+                  <%= business_cashflow_signed_money(item.bank_effect_cents, currency: @projection.currency) %>
+                </td>
+                <td class="p-3 text-right text-secondary">
+                  <%= business_cashflow_money(item.event.vat_amount_cents, currency: @projection.currency) %>
+                </td>
+                <td class="p-3 text-secondary"><%= item.event.status.humanize %></td>
+                <td class="p-3 text-right text-primary">
+                  <%= business_cashflow_money(item.running_bank_balance_cents, currency: @projection.currency) %>
+                </td>
+                <td class="p-3 text-right text-primary">
+                  <%= business_cashflow_money(item.running_free_cash_cents, currency: @projection.currency) %>
+                </td>
+              </tr>
+            <% end %>
+          <% else %>
+            <tr>
+              <td colspan="8" class="p-6 text-center text-secondary">
+                <%= t(".timeline.empty", default: "No planned business cashflow events yet.") %>
+              </td>
+            </tr>
+          <% end %>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="space-y-3">
+    <h2 class="text-lg font-medium text-primary"><%= t(".vat_periods.title", default: "VAT periods") %></h2>
+    <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
+      <% @tax_periods.each do |period| %>
+        <article class="bg-container shadow-border-xs rounded-lg p-4 space-y-2">
+          <div class="flex items-center justify-between gap-3">
+            <h3 class="font-medium text-primary"><%= period.period_key %></h3>
+            <span class="text-xs text-secondary"><%= period.status.humanize %></span>
+          </div>
+          <p class="text-sm text-secondary"><%= l(period.start_date) %> - <%= l(period.end_date) %></p>
+          <p class="text-sm text-secondary"><%= t(".vat_periods.due", default: "Due %{date}", date: l(period.due_date)) %></p>
+        </article>
+      <% end %>
+    </div>
+    <p class="text-sm text-secondary">
+      <%= t(".vat_periods.warning", default: "Planning estimate only. Verify VAT/F24 dates and amounts with your commercialista.") %>
+    </p>
+  </section>
+</div>

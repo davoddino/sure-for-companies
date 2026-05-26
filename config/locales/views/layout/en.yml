@@ -7,6 +7,7 @@ en:
       nav:
         assistant: Assistant
         budgets: Budgets
+        business_cashflow: Cashflow
         home: Home
         reports: Reports
         transactions: Transactions

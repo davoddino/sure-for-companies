@@ -65,7 +65,6 @@
                 "data-auto-submit-form-target": "auto" %>
           <%= f.date_field :date,
                 label: t(".date_label"),
-                max: Date.current,
                 disabled: @entry.linked? || split_locked || edit_locked,
                 "data-auto-submit-form-target": "auto" %>
           <% unless @entry.transaction.transfer? %>
@@ -126,6 +125,28 @@
                     disabled: !can_annotate_entry?
                   },
                   { "data-controller": "multi-select", "data-auto-submit-form-target": "auto" } %>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <%= ef.number_field :business_vat_amount,
+                    label: t(".business_vat_amount"),
+                    min: 0,
+                    step: "0.01",
+                    placeholder: "0.00",
+                    disabled: !can_annotate_entry?,
+                    "data-auto-submit-form-target": "auto" %>
+              <%= ef.number_field :business_stamp_duty_amount,
+                    label: t(".business_stamp_duty_amount"),
+                    min: 0,
+                    step: "0.01",
+                    placeholder: "0.00",
+                    disabled: !can_annotate_entry?,
+                    "data-auto-submit-form-target": "auto" %>
+            </div>
+            <%= ef.text_area :business_tax_notes,
+                  label: t(".business_tax_notes"),
+                  placeholder: t(".business_tax_notes_placeholder"),
+                  rows: 3,
+                  disabled: !can_annotate_entry?,
+                  "data-auto-submit-form-target": "auto" %>
           <% end %>
         <% end %>
       <% end %>
