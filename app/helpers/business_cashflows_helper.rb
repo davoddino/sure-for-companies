@@ -12,18 +12,18 @@ module BusinessCashflowsHelper
     cents.to_i.negative? ? "text-destructive" : "text-success"
   end
 
-  def business_cashflow_free_cash_series(projection)
+  def business_cashflow_projected_bank_series(projection)
     points = [
       {
         date: projection.as_of,
-        value: business_cashflow_money_from_cents(projection.free_cash_cents, currency: projection.currency)
+        value: business_cashflow_money_from_cents(projection.bank_balance_cents, currency: projection.currency)
       }
     ]
 
     projection.timeline.each do |item|
       points << {
         date: item.date,
-        value: business_cashflow_money_from_cents(item.running_free_cash_cents, currency: projection.currency)
+        value: business_cashflow_money_from_cents(item.running_bank_balance_cents, currency: projection.currency)
       }
     end
 

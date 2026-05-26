@@ -177,6 +177,16 @@ class TransactionTest < ActiveSupport::TestCase
     )
   end
 
+  test "business tax metadata accepts localized decimal separators" do
+    transaction = Transaction.new
+
+    transaction.business_vat_amount = "368,07"
+    transaction.business_stamp_duty_amount = "1.234,56"
+
+    assert_equal "368.07", transaction.business_vat_amount
+    assert_equal "1234.56", transaction.business_stamp_duty_amount
+  end
+
   test "business tax metadata clears blank values" do
     transaction = Transaction.new(
       extra: {
@@ -203,6 +213,14 @@ class TransactionTest < ActiveSupport::TestCase
     assert_not transaction.valid?
     assert_includes transaction.errors[:business_vat_amount], "must be a number"
     assert_includes transaction.errors[:business_stamp_duty_amount], "must be greater than or equal to 0"
+  end
+
+  test "business tax amount validation rejects values above transaction amount" do
+    transaction = entries(:transaction).entryable
+    transaction.business_vat_amount = "15.00"
+
+    assert_not transaction.valid?
+    assert_includes transaction.errors[:business_vat_amount], "must be less than or equal to the transaction amount"
   end
 
   test "activity_security returns the referenced security from extra metadata" do

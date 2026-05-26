@@ -29,8 +29,8 @@
     <% [
       [ t(".metrics.bank_balance", default: "Saldo bancario"), @projection.bank_balance_cents ],
       [ t(".metrics.projected_free", default: "Disponibilita libera"), @projection.projected_free_cash_cents ],
-      [ t(".metrics.free_cash_without_inflows", default: "Margine senza incassi"), @projection.free_cash_cents ],
-      [ t(".metrics.lowest_free", default: "Punto minimo disponibilita"), @projection.lowest_projected_free_cash_cents ],
+      [ t(".metrics.lowest_bank", default: "Saldo minimo previsto"), @projection.lowest_projected_bank_balance_cents ],
+      [ t(".metrics.net_period_cashflow", default: "Flusso netto periodo"), @projection.projected_bank_balance_cents - @projection.bank_balance_cents ],
       [ t(".metrics.confirmed_inflows", default: "Incassi confermati"), @projection.confirmed_inflows_cents ],
       [ t(".metrics.committed_outflows", default: "Uscite impegnate"), -@projection.committed_outflows_cents ],
       [ t(".metrics.vat_reserve", default: "IVA accantonata"), -@projection.vat_reserve_cents ],
@@ -60,17 +60,17 @@
 
   <section class="bg-container shadow-border-xs rounded-lg p-4 space-y-4">
     <div class="flex items-center justify-between gap-3">
-      <h2 class="text-lg font-medium text-primary"><%= t(".chart.title", default: "Andamento disponibilita") %></h2>
+      <h2 class="text-lg font-medium text-primary"><%= t(".chart.title", default: "Andamento saldo previsto") %></h2>
       <p class="text-sm text-secondary">
         <%= t(".timeline.horizon", default: "%{days} giorni", days: @horizon_days) %>
       </p>
     </div>
 
     <div
-      id="businessCashflowFreeCashChart"
+      id="businessCashflowProjectedBankChart"
       class="relative h-72 min-w-0"
       data-controller="time-series-chart"
-      data-time-series-chart-data-value="<%= business_cashflow_free_cash_series(@projection).to_json %>"></div>
+      data-time-series-chart-data-value="<%= business_cashflow_projected_bank_series(@projection).to_json %>"></div>
   </section>
 
   <section class="space-y-3">
@@ -92,7 +92,7 @@
             <th class="text-right font-medium p-3"><%= t(".timeline.vat", default: "VAT") %></th>
             <th class="text-left font-medium p-3"><%= t(".timeline.status", default: "Status") %></th>
             <th class="text-right font-medium p-3"><%= t(".timeline.bank", default: "Projected bank") %></th>
-            <th class="text-right font-medium p-3"><%= t(".timeline.free_cash", default: "Projected free cash") %></th>
+            <th class="text-right font-medium p-3"><%= t(".timeline.available", default: "Disponibilita prevista") %></th>
           </tr>
         </thead>
         <tbody class="divide-y divide-divider">
@@ -113,7 +113,7 @@
                   <%= business_cashflow_money(item.running_bank_balance_cents, currency: @projection.currency) %>
                 </td>
                 <td class="p-3 text-right text-primary">
-                  <%= business_cashflow_money(item.running_free_cash_cents, currency: @projection.currency) %>
+                  <%= business_cashflow_money(item.running_available_balance_cents, currency: @projection.currency) %>
                 </td>
               </tr>
             <% end %>

@@ -26,7 +26,7 @@ class BusinessCashflowsControllerTest < ActionDispatch::IntegrationTest
     assert_response :ok
     assert_select "h1", text: "Business Cashflow"
     assert_select "p", text: "Disponibilita libera"
-    assert_select "p", text: "Margine senza incassi"
+    assert_select "p", text: "Flusso netto periodo"
     assert_select "[data-controller='time-series-chart']", 1
     assert_equal 8, @family.business_cashflow_tax_periods.count
   end

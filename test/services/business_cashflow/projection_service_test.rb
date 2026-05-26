@@ -166,6 +166,31 @@ module BusinessCashflow
       assert_equal 0, result.vat_reserve_cents
     end
 
+    test "oversized transaction VAT is interpreted as cents when it matches the transaction amount" do
+      account = @family.accounts.create!(
+        name: "EUR bank",
+        balance: 2500,
+        currency: "EUR",
+        classification: "asset",
+        accountable: Depository.new
+      )
+
+      expense = Transaction.new
+      expense.business_vat_amount = "36807"
+
+      account.entries.create!(
+        name: "Notaio",
+        date: @as_of + 1.day,
+        amount: 2266.54,
+        currency: "EUR",
+        entryable: expense
+      )
+
+      result = BusinessCashflow::ProjectionService.new(@family, as_of: @as_of).call
+
+      assert_equal 36_807, result.timeline.first.event.vat_amount_cents
+    end
+
     test "bank balance uses as-of balance while future transactions reduce free cash" do
       account = @family.accounts.create!(
         name: "EUR bank",

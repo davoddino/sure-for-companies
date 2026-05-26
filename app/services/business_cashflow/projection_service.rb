@@ -28,6 +28,7 @@ module BusinessCashflow
       :spendable_effect_cents,
       :running_bank_balance_cents,
       :running_free_cash_cents,
+      :running_available_balance_cents,
       :vat_reserve_cents,
       keyword_init: true
     )
@@ -240,6 +241,7 @@ module BusinessCashflow
             spendable_effect_cents: running_free - previous_free_cash,
             running_bank_balance_cents: running_bank,
             running_free_cash_cents: running_free,
+            running_available_balance_cents: running_bank - running_vat_reserve - running_tax_reserve,
             vat_reserve_cents: running_vat_reserve
           )
           previous_free_cash = item.running_free_cash_cents
@@ -292,8 +294,8 @@ module BusinessCashflow
       def future_transaction_forecast_events(after:, through:)
         future_transaction_entries(after:, through:).map do |entry|
           bank_effect_cents = entry_bank_effect_cents(entry)
-          vat_amount_cents = transaction_business_vat_cents(entry.entryable)
-          stamp_duty_cents = transaction_business_stamp_duty_cents(entry.entryable)
+          vat_amount_cents = transaction_business_vat_cents(entry)
+          stamp_duty_cents = transaction_business_stamp_duty_cents(entry)
 
           ForecastTransactionEvent.new(
             entry: entry,
@@ -345,20 +347,20 @@ module BusinessCashflow
 
       def transaction_vat_debit_cents(through:)
         fiscal_transaction_entries(through:)
-          .sum { |entry| entry_bank_effect_cents(entry).positive? ? transaction_business_vat_cents(entry.entryable) : 0 }
+          .sum { |entry| entry_bank_effect_cents(entry).positive? ? transaction_business_vat_cents(entry) : 0 }
       end
 
       def transaction_vat_credit_cents(through:)
         fiscal_transaction_entries(through:)
-          .sum { |entry| entry_bank_effect_cents(entry).negative? ? transaction_business_vat_cents(entry.entryable) : 0 }
+          .sum { |entry| entry_bank_effect_cents(entry).negative? ? transaction_business_vat_cents(entry) : 0 }
       end
 
       def transaction_stamp_duty_reserve_cents(through:)
         debit = fiscal_transaction_entries(through:)
-          .sum { |entry| entry_bank_effect_cents(entry).positive? ? transaction_business_stamp_duty_cents(entry.entryable) : 0 }
+          .sum { |entry| entry_bank_effect_cents(entry).positive? ? transaction_business_stamp_duty_cents(entry) : 0 }
 
         credit = fiscal_transaction_entries(through:)
-          .sum { |entry| entry_bank_effect_cents(entry).negative? ? transaction_business_stamp_duty_cents(entry.entryable) : 0 }
+          .sum { |entry| entry_bank_effect_cents(entry).negative? ? transaction_business_stamp_duty_cents(entry) : 0 }
 
         [ debit - credit, 0 ].max
       end
@@ -380,22 +382,38 @@ module BusinessCashflow
 
         [
           bank_effect_cents -
-            transaction_business_vat_cents(entry.entryable) -
-            transaction_business_stamp_duty_cents(entry.entryable),
+            transaction_business_vat_cents(entry) -
+            transaction_business_stamp_duty_cents(entry),
           0
         ].max
       end
 
-      def transaction_business_vat_cents(transaction)
-        return 0 unless transaction.respond_to?(:business_vat_amount)
-
-        money_to_cents(transaction.business_vat_amount.presence || 0)
+      def transaction_business_vat_cents(entry)
+        transaction_business_tax_cents(entry, :business_vat_amount)
       end
 
-      def transaction_business_stamp_duty_cents(transaction)
-        return 0 unless transaction.respond_to?(:business_stamp_duty_amount)
+      def transaction_business_stamp_duty_cents(entry)
+        transaction_business_tax_cents(entry, :business_stamp_duty_amount)
+      end
 
-        money_to_cents(transaction.business_stamp_duty_amount.presence || 0)
+      def transaction_business_tax_cents(entry, attribute)
+        transaction = entry.entryable
+        return 0 unless transaction.respond_to?(attribute)
+
+        amount = transaction.public_send(attribute).presence.to_d
+        amount = normalize_oversized_business_tax_amount(amount, entry)
+
+        money_to_cents(amount)
+      end
+
+      def normalize_oversized_business_tax_amount(amount, entry)
+        gross_amount = entry.amount.to_d.abs
+        return amount if gross_amount.zero? || amount <= gross_amount
+
+        cents_interpretation = amount / 100
+        return cents_interpretation if amount >= gross_amount * 10 && cents_interpretation <= gross_amount
+
+        gross_amount
       end
 
       def transaction_vat_direction(bank_effect_cents, reserve_cents)

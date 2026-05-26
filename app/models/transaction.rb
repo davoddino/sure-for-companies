@@ -114,6 +114,8 @@ class Transaction < ApplicationRecord
           errors.add(attribute, "must be a number")
         elsif amount.negative?
           errors.add(attribute, "must be greater than or equal to 0")
+        elsif entry&.amount.present? && amount > entry.amount.abs
+          errors.add(attribute, "must be less than or equal to the transaction amount")
         end
       end
     end
@@ -147,12 +149,30 @@ class Transaction < ApplicationRecord
     def normalize_business_tax_amount(value)
       return nil if value.blank?
 
-      amount = BigDecimal(value.to_s)
+      normalized_value = normalize_decimal_input(value)
+      amount = BigDecimal(normalized_value)
       raise ArgumentError unless amount.finite?
 
       amount.to_s("F")
     rescue ArgumentError
       value.to_s
+    end
+
+    def normalize_decimal_input(value)
+      normalized = value.to_s.strip.delete(" ").delete("€")
+      has_comma = normalized.include?(",")
+      has_dot = normalized.include?(".")
+
+      if has_comma && has_dot
+        decimal_separator = normalized.rindex(",") > normalized.rindex(".") ? "," : "."
+        thousands_separator = decimal_separator == "," ? "." : ","
+        normalized = normalized.delete(thousands_separator)
+        normalized = normalized.tr(decimal_separator, ".")
+      elsif has_comma
+        normalized = normalized.tr(",", ".")
+      end
+
+      normalized
     end
 
   public
